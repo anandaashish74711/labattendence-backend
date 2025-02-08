@@ -82,16 +82,22 @@ app.get("/attendance-by-date", (req, res) => {
     }
 
     const query = `
-        SELECT 
-            u.userid, 
-            u.username, 
-            ar.checkin, 
-            ar.checkout, 
-            ar.duration
-        FROM tbl_attendance_record ar
-        JOIN tbl_user_master u ON ar.userid = u.userid
-        WHERE DATE(ar.checkin) = ?
-        ORDER BY ar.checkin DESC;
+     SELECT 
+    u.userid, 
+    u.username, 
+    ar.checkin, 
+    ar.checkout, 
+    CASE 
+        WHEN ar.entrystat = 1 AND ar.exitstat = 1 THEN ar.duration 
+        ELSE NULL 
+    END AS duration,
+    wo.overtime
+FROM tbl_attendance_record ar
+JOIN tbl_user_master u ON ar.userid = u.userid
+LEFT JOIN tbl_work_overtime wo ON ar.userid = wo.userid
+WHERE DATE(ar.checkin) = ?
+ORDER BY ar.checkin DESC;
+
     `;
 
     db.query(query, [date], (err, results) => {
@@ -109,7 +115,8 @@ app.get("/attendance-by-date", (req, res) => {
             username: record.username,
             checkin: record.checkin ? new Date(record.checkin).toISOString() : null,
             checkout: record.checkout ? new Date(record.checkout).toISOString() : null,
-            duration: record.duration
+            duration: record.duration,
+            overtime: record.overtime ? new Date(record.overtime).toISOString() : null
         }));
 
         res.json({
@@ -119,6 +126,7 @@ app.get("/attendance-by-date", (req, res) => {
         });
     });
 });
+
 
 // Updated endpoint with correct average calculation
 app.get("/total-hours-by-date-range", (req, res) => {
@@ -177,6 +185,41 @@ app.get("/total-hours-by-date-range", (req, res) => {
                 total_days: totalDaysInRange
             },
             records: processedResults
+        });
+    });
+
+
+
+
+
+
+});
+app.post("/login", (req, res) => {
+    const { loginid, loginpassword } = req.body;
+    console.log("Request body:", req.body);
+
+
+    console.log("Received loginid:", loginid);  // Debug log
+    console.log("Received loginpassword:", loginpassword);  // Debug log
+
+    if (!loginid || !loginpassword) {
+        return res.status(400).json({ error: "Both loginid and loginpassword are required" });
+    }
+
+    const query = "SELECT * FROM tbl_login_info WHERE loginid = ? AND loginpassword = ?";
+    db.query(query, [loginid.trim(), loginpassword.trim()], (err, results) => {
+        if (err) {
+            console.error("Database query failed:", err);
+            return res.status(500).json({ error: "Internal server error" });
+        }
+
+        if (results.length === 0) {
+            return res.status(401).json({ error: "Invalid login credentials" });
+        }
+
+        res.json({
+            message: "Login successful",
+            user: { loginid: results[0].loginid }
         });
     });
 });
