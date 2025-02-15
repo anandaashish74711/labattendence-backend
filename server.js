@@ -82,21 +82,27 @@ app.get("/attendance-by-date", (req, res) => {
     }
 
     const query = `
-     SELECT 
-    u.userid, 
-    u.username, 
-    ar.checkin, 
-    ar.checkout, 
-    CASE 
-        WHEN ar.entrystat = 1 AND ar.exitstat = 1 THEN ar.duration 
-        ELSE NULL 
-    END AS duration,
-    wo.overtime
-FROM tbl_attendance_record ar
-JOIN tbl_user_master u ON ar.userid = u.userid
-LEFT JOIN tbl_work_overtime wo ON ar.userid = wo.userid
-WHERE DATE(ar.checkin) = ?
-ORDER BY ar.checkin DESC;
+   WITH RankedAttendance AS (
+    SELECT 
+        u.userid, 
+        u.username, 
+        ar.checkin, 
+        ar.checkout, 
+        CASE 
+            WHEN ar.entrystat = 1 AND ar.exitstat = 1 THEN ar.duration 
+            ELSE NULL 
+        END AS duration,
+        wo.overtime,
+        ROW_NUMBER() OVER (PARTITION BY u.userid ORDER BY ar.checkin DESC) AS rn
+    FROM tbl_attendance_record ar
+    JOIN tbl_user_master u ON ar.userid = u.userid
+    LEFT JOIN tbl_work_overtime wo ON ar.userid = wo.userid
+    WHERE DATE(ar.checkin) = ?
+)
+SELECT userid, username, checkin, checkout, duration, overtime
+FROM RankedAttendance
+WHERE rn = 1;
+
 
     `;
 
