@@ -7,20 +7,46 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-const db = mysql.createConnection({
+
+// Create a connection pool
+const db = mysql.createPool({
     host: "10.2.216.199",
     user: "test",
     password: "test123",
-    database: "labattendance"
+    database: "labattendance",
+    waitForConnections: true,
+    connectionLimit: 10,
+    queueLimit: 0
 });
 
-db.connect((err) => {
-    if (err) {
-        console.error("Database connection failed:", err);
-    } else {
-        console.log("Connected to MariaDB");
+// Function to test DB connection
+function checkDatabaseConnection() {
+    db.getConnection((err, connection) => {
+        if (err) {
+            console.error("\n❌ Database Connection Failed!");
+            console.error("   🔹 Error Code: ", err.code);
+            console.error("   🔹 SQL Message: ", err.message || "N/A");
+            console.error("   🔹 Stack Trace: \n", err.stack);
+            return;
+        }
+        console.log("✅ Connected to MariaDB!");
+        connection.release();
+    });
+}
+
+// Auto-reconnect on 'PROTOCOL_CONNECTION_LOST'
+db.on("error", (err) => {
+    console.error("⚠️ MySQL Pool Error:", err);
+    if (err.code === "PROTOCOL_CONNECTION_LOST") {
+        console.log("🔄 Attempting to reconnect...");
+        setTimeout(checkDatabaseConnection, 5000); // Retry after 5s
     }
 });
+
+// Run the connection test
+checkDatabaseConnection();
+
+module.exports = db;
 
 // Helper function to calculate days between dates (inclusive)
 function getDaysBetweenDates(startDate, endDate) {
