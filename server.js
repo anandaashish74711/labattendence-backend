@@ -8,8 +8,8 @@ app.use(cors());
 app.use(express.json());
 
 
-// Create a connection pool
-const db = mysql.createPool({
+
+const dbConfig = {
     host: "10.2.216.199",
     user: "test",
     password: "test123",
@@ -17,36 +17,67 @@ const db = mysql.createPool({
     waitForConnections: true,
     connectionLimit: 10,
     queueLimit: 0
-});
+};
 
-// Function to test DB connection
-function checkDatabaseConnection() {
+let db; // Define the connection pool variable
+
+function handleDisconnect() {
+    db = mysql.createPool(dbConfig);
+
     db.getConnection((err, connection) => {
         if (err) {
             console.error("\n❌ Database Connection Failed!");
             console.error("   🔹 Error Code: ", err.code);
-            console.error("   🔹 SQL Message: ", err.message || "N/A");
+            console.error("   🔹 SQL Message: ", err.sqlMessage || "N/A");
             console.error("   🔹 Stack Trace: \n", err.stack);
-            return;
+            setTimeout(handleDisconnect, 5000); // Retry connection after 5 seconds
+        } else {
+            console.log("✅ Connected to MariaDB!");
+            connection.release();
         }
-        console.log("✅ Connected to MariaDB!");
-        connection.release();
+    });
+ 
+    
+
+    // Handle MySQL errors
+    db.on("error", (err) => {
+        console.error("⚠️ MySQL Pool Error:", err);
+        if (err.code === "PROTOCOL_CONNECTION_LOST") {
+            console.log("🔄 Attempting to reconnect...");
+            handleDisconnect(); // Reconnect on connection loss
+        }
     });
 }
 
-// Auto-reconnect on 'PROTOCOL_CONNECTION_LOST'
-db.on("error", (err) => {
-    console.error("⚠️ MySQL Pool Error:", err);
-    if (err.code === "PROTOCOL_CONNECTION_LOST") {
-        console.log("🔄 Attempting to reconnect...");
-        setTimeout(checkDatabaseConnection, 5000); // Retry after 5s
+// Periodically check the database connection
+function monitorConnection() {
+    if (!db) {
+        console.error("❌ Database pool is not initialized! Attempting to reconnect...");
+        return handleDisconnect();
     }
-});
 
-// Run the connection test
-checkDatabaseConnection();
+    db.getConnection((err, connection) => {
+        if (err) {
+            console.error("🚨 Lost Database Connection! Reconnecting...");
+            return handleDisconnect();
+        } else {
+            console.log("✅ Database connection is healthy.");
+            connection.release();
+        }
+    });
+
+    setTimeout(monitorConnection, 10000); // Check every 10 seconds
+}
+
+// Initialize DB connection
+handleDisconnect();
+setTimeout(monitorConnection, 10000); // Start monitoring after 10 seconds
 
 module.exports = db;
+
+
+
+
 
 // Helper function to calculate days between dates (inclusive)
 function getDaysBetweenDates(startDate, endDate) {
