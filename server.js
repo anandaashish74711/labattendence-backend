@@ -19,7 +19,7 @@ const dbConfig = {
     queueLimit: 0
 };
 
-let db; // Define the connection pool variable
+let db; 
 
 function handleDisconnect() {
     db = mysql.createPool(dbConfig);
@@ -139,7 +139,7 @@ app.get("/attendance-by-date", (req, res) => {
     }
 
     const query = `
-   WITH RankedAttendance AS (
+  WITH RankedAttendance AS (
     SELECT 
         u.userid, 
         u.username, 
@@ -150,15 +150,17 @@ app.get("/attendance-by-date", (req, res) => {
             ELSE NULL 
         END AS duration,
         wo.overtime,
+        wo.duration AS overtime_duration,  -- Adding duration from tbl_work_overtime
         ROW_NUMBER() OVER (PARTITION BY u.userid ORDER BY ar.checkin DESC) AS rn
     FROM tbl_attendance_record ar
     JOIN tbl_user_master u ON ar.userid = u.userid
     LEFT JOIN tbl_work_overtime wo ON ar.userid = wo.userid
     WHERE DATE(ar.checkin) = ?
 )
-SELECT userid, username, checkin, checkout, duration, overtime
+SELECT userid, username, checkin, checkout, duration, overtime, overtime_duration
 FROM RankedAttendance
 WHERE rn = 1;
+
 
 
     `;
